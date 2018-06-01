@@ -133,6 +133,10 @@ namespace maxy
 			// Iterators
 			class iterator
 			{
+
+				struct invalidated {};
+				struct out_of_range {};
+
 				json & ref;
 				json_type initial_type;
 				std::map<std::string, json>::iterator object_iterator;

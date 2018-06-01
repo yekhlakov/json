@@ -201,8 +201,8 @@ namespace maxy
 		 */
 		json json::parse (const std::string & s, bool strict)
 		{
-			auto x = parse_value (std::istringstream{s});
-			return x.first;
+			std::istringstream is{s};
+			return parse_value (is).first;
 		}
 
 		/**
@@ -221,7 +221,6 @@ namespace maxy
 					 );
 		}
 
-		
 		/**
 		* Equalities
 		*/
@@ -523,23 +522,23 @@ namespace maxy
 		std::pair<const std::string, json &> json::iterator::operator* () const
 		{
 			if (initial_type != ref.type)
-				return{std::string{}, json::make_error (json_error::InvalidatedIterator)};
+				throw json::iterator::invalidated{};
 
 			switch (initial_type)
 			{
 				case json::json_type::Array:
 					if (ptr >= ref.array_elements.size ())
-						return{std::string{}, json::make_error (json_error::OutOfRange)};
+						throw json::iterator::out_of_range{};
 					return{std::string{}, ref.array_elements[ptr]};
 
 				case json::json_type::Object:
 					if (ptr >= ref.object_elements.size ())
-						return{std::string{}, json::make_error (json_error::OutOfRange)};
+						throw json::iterator::out_of_range{};
 					return{object_iterator->first, object_iterator->second};
 
 				default:
 					if (ptr > 0) 
-						return{std::string{}, json::make_error (json_error::OutOfRange)};
+						throw json::iterator::out_of_range{};
 					
 					return{std::string{}, ref};
 			}
