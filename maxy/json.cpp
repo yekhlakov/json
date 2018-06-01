@@ -6,19 +6,27 @@ namespace maxy
 {
 	namespace data
 	{
+		/**
+		 * Read a string from input stream
+		 * A string is either a regular double-quoted string, or an unquoted token
+		 */
 		std::pair<json, char> json::read_string (std::istream & is, char first)
 		{
 			std::ostringstream os;
+
+			// if the first character is not a quote, it is part of the string
 			if (first != '"') os << first;
+
 			char c;
 			while (true)
 			{
+				// read next char
 				c = is.get ();
-
 				if (is.eof ()) break;
 
 				if (first == '"')
 				{
+					// if the string is quoted - check for escaped quoted and ignore them
 					if (c == '\\')
 					{
 						char cc = is.get ();
@@ -29,36 +37,47 @@ namespace maxy
 					}
 					else if (c == '"')
 					{
+						// if we found a double quote and it is not escaped - it is the end
+						// so skip any following whitespace and return
 						c = skip_whitespace (is);
 						return std::make_pair (json{maxy::strings::unescape (os.str ())}, c);
 					}
 				}
 				else
 				{
+					// the unquoted string is terminated by whitespace
+					// or by any of terminating characters (see below)
 					if (c == ' ' || c == 9 || c == 10 || c == 13)
 					{
 						c = skip_whitespace (is);
 						return std::make_pair (json{maxy::strings::unescape (os.str ())}, c);
 					}
-					else if (c == ':')
+					else if (c == ':' || c == ',' || c == '}' || c == ']')
 					{
 						return std::make_pair (json{maxy::strings::unescape (os.str ())}, c);
 					}
 				}
+				// add character to our string
 				os.put (c);
 			}
 
+			// we exit the loop only if eos is reached, so next char is 0
 			return std::make_pair (json{maxy::strings::unescape(os.str ())}, char{0});
 		}
 
+		/**
+		 * Read a token from an input stream
+		 * A token is an unquoted string containing only regular chars
+		 */
 		std::pair<json, char> json::read_token (std::istream & is, char first)
 		{
 			std::ostringstream os;
 			os << first;
 			char c;
-			while (1)
+			while (true)
 			{
 				c = is.get ();
+				// loop until we find any of terminating characters
 				if (c == ' ' ||
 					c == 9 ||
 					c == 10 ||
@@ -72,9 +91,14 @@ namespace maxy
 
 			if (is.eof ()) c = char{0};
 
+			// return a json converted from the found token (probably invalid)
 			return std::make_pair (from_token (os.str ()), c);
 		}
 
+		/**
+		 * Discard characters from a stream until any non-whitespace char is found
+		 * Return this char
+		 */
 		char json::skip_whitespace (std::istream & is)
 		{
 			char c;
@@ -87,6 +111,9 @@ namespace maxy
 			}
 		}
 
+		/**
+		 * Create a json from a token such as null, false etc.
+		 */
 		json json::from_token (const std::string s)
 		{
 			if (s == "null") return json{nullptr};
@@ -95,21 +122,26 @@ namespace maxy
 			if (maxy::strings::is_int (s)) return json{std::stoll (s)};
 			if (maxy::strings::is_float (s)) return json{std::stold (s)};
 
-			// otherwise it is error
+			// otherwise it is a parse error
 			return make_error ();
 		}
 
+		/**
+		 * Parse a string value into a json (probably recursively)
+		 */
 		std::pair<json, char> json::parse_value (std::istream & is, char first)
 		{
 			// get the first character of the token
 			char c = first;
 
+			// skip whitespace if needed
 			if (!c) c = skip_whitespace (is);
 
+			// if the first character is a string - return string
 			if (c == '"')
-				// a string
 				return read_string (is, c);
 
+			// if the first character is one of the following - a token
 			if (c == 'n'  // null
 				|| c == 't'  // true
 				|| c == 'f'  // false
@@ -118,28 +150,31 @@ namespace maxy
 				|| (c >= '0' && c <= '9') // positive number
 				|| c == '.' // float with zero int part
 				)
-			{
 				return read_token (is, c);
-			}
 
+			// if the first character is [, it is an array
 			if (c == '[')
 			{
-				// array
 				auto rv = std::make_pair (make_array (), char{0});
+
+				// read array elements
 				while (true)
 				{
 					auto cx = skip_whitespace (is);
 					rv.second = cx;
 					if (is.eof () || cx == ']') break;
 
+					// ignore all commas
 					if (cx == ',') continue;
 
 					auto p = parse_value (is, cx);
 					if (p.first.is_empty ()) break;
+
 					rv.first.push_back (p.first);
 					rv.second = p.second;
 					if (p.second == ']')
 					{
+						// the array terminated while reading one of its elements
 						rv.second = skip_whitespace (is);
 						break;
 					}
@@ -148,10 +183,12 @@ namespace maxy
 				return rv;
 			}
 
+			// if the first character is {, it is an object
 			if (c == '{')
 			{
-				// object
 				auto rv = std::make_pair (make_object (), char{0});
+
+				// read all key:value pairs
 				while (true)
 				{
 					char cx = skip_whitespace (is);
@@ -161,12 +198,12 @@ namespace maxy
 					// skip commas entirely
 					if (cx == ',') continue;
 
+					// read the key
 					auto s = read_string (is, cx);
 
+					// propagate errors
 					if (s.first.error != json_error::None)
-					{
 						rv.first.error = s.first.error;
-					}
 
 					// a string must be followed by a semicolon
 					if (s.second != ':')
@@ -175,33 +212,47 @@ namespace maxy
 						return rv;
 					}
 
+					// read value
 					auto p = parse_value (is);
 					if (p.first.is_empty ()) break;
+
+					// add key-value pair to our object
 					rv.first[s.first.string_value] = p.first;
+
+					// propagate error
 					if (p.first.error != json_error::None)
 						rv.first.error = p.first.error;
+
+					// store last character
 					rv.second = p.second;
+
+					// check if we must break the loop and return
 					if (!p.second || p.second == '}' || is.eof ()) break;
 				}
 				return rv;
 			}
 
+			// closing brackets - the object or array have no more elements
 			if (c == ']' || c == '}')
 			{
 				// empty value
-				return std::make_pair (json{}, char{-1});
+				return std::make_pair (json{}, char{0});
 			}
 
 			// any other char is error
-			return std::make_pair (make_error (), char{-1});
+			return std::make_pair (make_error (), char{0});
 		}
 
 		/**
 		 * Parse a string into a json object
 		 */
-		json json::parse (const std::string & s, bool strict)
+		json json::parse (const std::string & s)
 		{
 			std::istringstream is{s};
+			return parse_value (is).first;
+		}
+		json json::parse (std::istream & is)
+		{
 			return parse_value (is).first;
 		}
 
@@ -243,11 +294,19 @@ namespace maxy
 			if (type != json_type::String) return false;
 			return other == string_value;
 		}
+
+		/**
+		 * Whether a json is equal to another json
+		 */
 		bool json::operator== (const json & other) const noexcept
 		{
+			// it is the same object - true
 			if (&other == this) return true;
+
+			// different types - false
 			if (other.type != type) return false;
 
+			// per-type checks
 			if (type == json_type::String)
 					return other.string_value == string_value;
 
@@ -256,6 +315,7 @@ namespace maxy
 
 			if (type == json_type::NumberFloat)
 					return other.float_value == float_value;
+
 			if (type == json_type::Array)
 			{
 				if (other.array_elements.size () != array_elements.size ()) return false;
@@ -450,6 +510,7 @@ namespace maxy
 						else break;
 					}
 					return os << "]";
+
 				case json::json_type::Object:
 					os << "{";
 					while (xjj != j.object_elements.cend ())
@@ -482,7 +543,7 @@ namespace maxy
 			}
 		}
 
-		// preincrement
+		// iterator preincrement
 		json::iterator & json::iterator::operator++ ()
 		{
 			ptr++;
@@ -490,7 +551,7 @@ namespace maxy
 				++object_iterator;
 			return *this;
 		}
-		// predecrement
+		// iterator predecrement
 		json::iterator & json::iterator::operator-- ()
 		{
 			ptr--;
@@ -498,14 +559,14 @@ namespace maxy
 				--object_iterator;
 			return *this;
 		}
-		// postincrement
+		// iterator postincrement
 		json::iterator json::iterator::operator++ (int)
 		{
 			auto temp = *this;
 			++(*this);
 			return temp;
 		}
-		// postdecrement
+		// iterator postdecrement
 		json::iterator json::iterator::operator-- (int)
 		{
 			auto temp = *this;

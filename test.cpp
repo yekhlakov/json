@@ -1,8 +1,7 @@
-#include <string>
 #include <iostream>
 #include "maxy/json.h"
 
-using json = maxy::data::json;
+using maxy::data::json;
 
 int main ()
 {

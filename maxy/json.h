@@ -86,7 +86,8 @@ namespace maxy
 			bool is_ok () { return error == json_error::None; }
 
 			// parse from a string
-			static json parse (const std::string & s, bool strict = false);
+			static json parse (const std::string & s);
+			static json parse (std::istream & is);
 
 			// conversion operators
 			explicit operator bool () const;
@@ -133,24 +134,42 @@ namespace maxy
 			// Iterators
 			class iterator
 			{
-
+				// exceptions
 				struct invalidated {};
 				struct out_of_range {};
 
+				// referenced object
 				json & ref;
+				// object type at iterator construction
+				// type change invalidates the iterator
 				json_type initial_type;
+				// iterator of object_elements
 				std::map<std::string, json>::iterator object_iterator;
+				// use integer pointer instead of array_elements iterator
 				size_t ptr;
+
 				public:
+				// construction and destruction
 				iterator (json & j, size_t p = 0);
 				~iterator () = default;
+				iterator (const iterator & i) = default;
+				iterator (iterator && i) = default;
 
+				// assignments
+				iterator & operator= (const iterator & i) = default;
+				iterator & operator= (iterator && i) = default;
+
+				// increments and decrements
 				iterator & operator++ ();
 				iterator & operator-- ();
 				iterator operator++ (int);
 				iterator operator-- (int);
+
+				// comparison
 				bool operator== (iterator & other) const;
 				bool operator!= (iterator & other) const { return !(*this == other); }
+
+				// dereferencing
 				std::pair<const std::string, json &> operator* () const;
 			};
 
