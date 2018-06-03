@@ -26,14 +26,22 @@ The object is written in strict format, i.e. no unnecessary whitespace, keys are
 ### 3. Modify
 
 `j = 3;` sets json to an integer value of 3 (floats, bools and strings are also accepted).
+
 `j["key"] = value;` sets the "key" field of the object.
+
 `j["a"]["b"]["c"] = 42;` we can construct nested objects just like that.
+
 `j[16] = nullptr;` sets the array element.
+
 Note that any assignment converts the json object into its appropriate type, losing any previous state.
-`json x = 16.0; // now json is just 16.0`
-`x["a"] = false; // now json is an object {"a":false}`
-`x[0] = "123"; // now json is an array ["123"]`
-`x.push_back(666);`
+
+`json x = 16.0; // x is just 16.0`
+
+`x.push_back(666);` // x is an array [666]
+
+`x["a"] = false; // x is an object {"a":false}`
+
+`x[0] = "123"; // x is an array ["123"]`
 
 ### 4. Iterate
 
