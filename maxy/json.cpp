@@ -9,6 +9,7 @@ namespace maxy
 		/**
 		 * Read a string from input stream
 		 * A string is either a regular double-quoted string, or an unquoted token
+		 * Return the parsed json string and the next character
 		 */
 		std::pair<json, char> json::read_string (std::istream & is, char first)
 		{
@@ -128,6 +129,7 @@ namespace maxy
 
 		/**
 		 * Parse a string value into a json (probably recursively)
+		 * 
 		 */
 		std::pair<json, char> json::parse_value (std::istream & is, char first)
 		{
@@ -226,8 +228,16 @@ namespace maxy
 					// store last character
 					rv.second = p.second;
 
+					if (p.second == '}')
+					{
+						// The object was terminated
+						rv.second = skip_whitespace (is);
+						break;
+					}
+
 					// check if we must break the loop and return
 					if (!p.second || p.second == '}' || is.eof ()) break;
+
 				}
 				return rv;
 			}
