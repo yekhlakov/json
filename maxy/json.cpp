@@ -27,7 +27,7 @@ namespace maxy
 
 				if (first == '"')
 				{
-					// if the string is quoted - check for escaped quoted and ignore them
+					// if the string is quoted - check for escaped quotes and ignore them
 					if (c == '\\')
 					{
 						char cc = is.get ();
@@ -127,9 +127,105 @@ namespace maxy
 			return make_error ();
 		}
 
+		// Read the object
+		// first is always '{' here
+		std::pair<json, char> json::read_object (std::istream & is, char first)
+		{
+			auto rv = std::make_pair (make_object (), char {0});
+
+			// Skip the whitespace between opening { and the first key
+			char cx = skip_whitespace (is);
+
+			// read all key:value pairs
+			while (true)
+			{
+				rv.second = cx;
+				if (!cx || is.eof () || cx == '}')
+				{
+					rv.second = ',';
+					break;
+				}
+
+				// skip commas and the following whitespace entirely
+				if (cx == ',' || cx == ' ' || cx == 9 || cx == 10 || cx == 13)
+				{
+					cx = skip_whitespace (is);
+					continue;
+				}
+
+				// read the key
+				auto s = read_string (is, cx);
+
+				// propagate errors
+				if (s.first.error != json_error::None)
+					rv.first.error = s.first.error;
+
+				// a string must be followed by a semicolon
+				if (s.second != ':')
+				{
+					rv.first.error = json_error::ParseError;
+					return rv;
+				}
+
+				// read value following the :
+				auto p = parse_value (is, 0);
+				if (p.first.is_empty ()) break;
+
+				// add key-value pair to our object
+				rv.first[s.first.string_value] = p.first;
+
+				// propagate error
+				if (p.first.error != json_error::None)
+					rv.first.error = p.first.error;
+
+				// store the next character and loop
+				cx = p.second;
+			}
+			return rv;
+		}
+
+		// Read the array
+		std::pair<json, char> json::read_array (std::istream & is, char first)
+		{
+			auto rv = std::make_pair (make_array (), char {0});
+
+			// read array elements
+			while (true)
+			{
+				auto cx = skip_whitespace (is);
+				rv.second = cx;
+				if (is.eof () || cx == ']')
+				{
+					rv.second = ',';
+					break;
+				}
+
+				// skip commas and the following whitespace entirely
+				if (cx == ',' || cx == ' ' || cx == 9 || cx == 10 || cx == 13)
+				{
+					cx = skip_whitespace (is);
+					continue;
+				}
+
+				auto p = parse_value (is, cx);
+				if (p.first.is_empty ()) break;
+
+				rv.first.push_back (p.first);
+				rv.second = p.second;
+				if (p.second == ']')
+				{
+					// the array terminated while reading one of its elements
+					rv.second = skip_whitespace (is);
+					break;
+				}
+				if (!p.second || is.eof ()) break;
+			}
+
+			return rv;
+		}
+
 		/**
 		 * Parse a string value into a json (probably recursively)
-		 * 
 		 */
 		std::pair<json, char> json::parse_value (std::istream & is, char first)
 		{
@@ -157,89 +253,13 @@ namespace maxy
 			// if the first character is [, it is an array
 			if (c == '[')
 			{
-				auto rv = std::make_pair (make_array (), char{0});
-
-				// read array elements
-				while (true)
-				{
-					auto cx = skip_whitespace (is);
-					rv.second = cx;
-					if (is.eof () || cx == ']') break;
-
-					// ignore all commas
-					if (cx == ',') continue;
-
-					auto p = parse_value (is, cx);
-					if (p.first.is_empty ()) break;
-
-					rv.first.push_back (p.first);
-					rv.second = p.second;
-					if (p.second == ']')
-					{
-						// the array terminated while reading one of its elements
-						rv.second = skip_whitespace (is);
-						break;
-					}
-					if (!p.second || is.eof ()) break;
-				}
-				return rv;
+				return read_array (is, c);
 			}
 
 			// if the first character is {, it is an object
 			if (c == '{')
 			{
-				auto rv = std::make_pair (make_object (), char{0});
-
-				// read all key:value pairs
-				while (true)
-				{
-					char cx = skip_whitespace (is);
-					rv.second = cx;
-					if (is.eof () || cx == '}') break;
-
-					// skip commas entirely
-					if (cx == ',') continue;
-
-					// read the key
-					auto s = read_string (is, cx);
-
-					// propagate errors
-					if (s.first.error != json_error::None)
-						rv.first.error = s.first.error;
-
-					// a string must be followed by a semicolon
-					if (s.second != ':')
-					{
-						rv.first.error = json_error::ParseError;
-						return rv;
-					}
-
-					// read value
-					auto p = parse_value (is);
-					if (p.first.is_empty ()) break;
-
-					// add key-value pair to our object
-					rv.first[s.first.string_value] = p.first;
-
-					// propagate error
-					if (p.first.error != json_error::None)
-						rv.first.error = p.first.error;
-
-					// store last character
-					rv.second = p.second;
-
-					if (p.second == '}')
-					{
-						// The object was terminated
-						rv.second = skip_whitespace (is);
-						break;
-					}
-
-					// check if we must break the loop and return
-					if (!p.second || p.second == '}' || is.eof ()) break;
-
-				}
-				return rv;
+				return read_object (is, c);
 			}
 
 			// closing brackets - the object or array have no more elements
@@ -259,11 +279,11 @@ namespace maxy
 		json json::parse (const std::string & s)
 		{
 			std::istringstream is{s};
-			return parse_value (is).first;
+			return parse_value (is, 0).first;
 		}
 		json json::parse (std::istream & is)
 		{
-			return parse_value (is).first;
+			return parse_value (is, 0).first;
 		}
 
 		/**
@@ -281,6 +301,73 @@ namespace maxy
 					 || (type == json_type::Object && !object_elements.size ())
 					 );
 		}
+
+		json::operator int () const {
+			if (type == json_type::NumberFloat)
+				return static_cast<int>(float_value);
+
+			if (type == json_type::NumberInt)
+				return static_cast<int>(int_value);
+
+			return 0;
+		}
+
+		json::operator long () const
+		{
+			if (type == json_type::NumberFloat)
+				return static_cast<long>(float_value);
+
+			if (type == json_type::NumberInt)
+				return static_cast<long>(int_value);
+
+			return 0;
+		}
+
+		json::operator long long () const
+		{
+			if (type == json_type::NumberFloat)
+				return static_cast<long long>(float_value);
+
+			if (type == json_type::NumberInt)
+				return int_value;
+
+			return 0;
+		}
+
+		json::operator float () const
+		{
+			if (type == json_type::NumberFloat)
+				return static_cast<float>(float_value);
+
+			if (type == json_type::NumberInt)
+				return static_cast<float>(int_value);
+
+			return 0.f;
+		}
+
+		json::operator double () const
+		{
+			if (type == json_type::NumberFloat)
+				return static_cast<double>(float_value);
+
+			if (type == json_type::NumberInt)
+				return static_cast<double>(int_value);
+
+			return 0.;
+		}
+
+		json::operator long double () const
+		{
+			if (type == json_type::NumberFloat)
+				return float_value;
+
+			if (type == json_type::NumberInt)
+				return static_cast<long double>(int_value);
+
+			return 0.;
+		}
+
+		json::operator const std::string () const { return string_value; }
 
 		/**
 		* Equalities
@@ -632,6 +719,20 @@ namespace maxy
 					return iterator (*this, object_elements.size ());
 				default:
 					return iterator (*this, 1);
+			}
+		}
+
+		// Get the size
+		size_t json::size ()
+		{
+			switch (type)
+			{
+			case json_type::Array:
+				return array_elements.size ();
+			case json_type::Object:
+				return object_elements.size ();
+			default:
+				return 0;
 			}
 		}
 	}

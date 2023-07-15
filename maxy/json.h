@@ -40,6 +40,8 @@ namespace maxy
 			static std::pair<json, char> read_token (std::istream & is, char first);
 			static json from_token (const std::string s);
 			static std::pair<json, char> parse_value (std::istream & is, char first = 0);
+			static std::pair<json, char> read_object (std::istream & is, char first);
+			static std::pair<json, char> read_array (std::istream & is, char first);
 
 			public:
 
@@ -91,13 +93,13 @@ namespace maxy
 
 			// conversion operators
 			explicit operator bool () const;
-			explicit operator int () const { return static_cast<int>(int_value); }
-			explicit operator long () const { return static_cast<long>(int_value); }
-			explicit operator long long () const { return int_value; }
-			explicit operator float () const { return static_cast<float>(float_value); }
-			explicit operator double () const { return static_cast<double>(float_value); }
-			explicit operator long double () const { return float_value; }
-			explicit operator const std::string () const { return string_value; }
+			explicit operator int () const;
+			explicit operator long () const;
+			explicit operator long long () const;
+			explicit operator float () const;
+			explicit operator double () const;
+			explicit operator long double () const;
+			explicit operator const std::string () const;
 
 			// equalities
 			bool operator== (const char * const p) const noexcept;
@@ -130,6 +132,9 @@ namespace maxy
 			// stack-like array access
 			json & push_back (json j);
 			json pop_back ();
+
+			// Get size of a json container
+			size_t size ();
 
 			// Iterators
 			class iterator
