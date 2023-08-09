@@ -203,7 +203,6 @@ namespace maxy
 				// skip commas and the following whitespace entirely
 				if (cx == ',' || cx == ' ' || cx == 9 || cx == 10 || cx == 13)
 				{
-					cx = skip_whitespace (is);
 					continue;
 				}
 
