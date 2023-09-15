@@ -11,11 +11,14 @@ namespace maxy
 	{
 		class json
 		{
-			public: class iterator;
+			public:
+				class iterator;
+				class const_iterator;
 			private:
 
 			// types
 			using iterator_type = iterator;
+			using const_iterator_type = const_iterator;
 			using object_container_type = std::map<std::string, json>;
 			using array_container_type = std::vector<json>;
 
@@ -26,9 +29,9 @@ namespace maxy
 			// Value storage
 			object_container_type object_elements;
 			array_container_type array_elements;
-			std::string string_value;
-			long long int_value;
-			long double float_value;
+			std::string string_value = "";
+			long long int_value = 0;
+			long double float_value = 0.0;
 
 			// Error
 			enum class json_error { None, InvalidatedIterator, ParseError, OutOfRange, };
@@ -84,8 +87,8 @@ namespace maxy
 			}
 
 			// state checkers
-			bool is_empty () { return type == json_type::Empty; }
-			bool is_ok () { return error == json_error::None; }
+			bool is_empty () const { return type == json_type::Empty; }
+			bool is_ok () const { return error == json_error::None; }
 
 			// parse from a string
 			static json parse (const std::string & s);
@@ -129,6 +132,11 @@ namespace maxy
 			json & operator[] (const std::string & key);
 			json & operator[] (size_t n);
 
+			// Const accessors
+			const json & operator[] (const char * const c) const;
+			const json & operator[] (const std::string & key) const;
+			const json & operator[] (size_t n) const;
+
 			// stack-like array access
 			json & push_back (json j);
 			json pop_back ();
@@ -137,6 +145,45 @@ namespace maxy
 			size_t size ();
 
 			// Iterators
+			class const_iterator
+			{
+				// exceptions
+				struct invalidated {};
+				struct out_of_range {};
+
+				// referenced object
+				const json & ref;
+				// object type at iterator construction
+				// type change invalidates the iterator
+				json_type initial_type;
+				// iterator of object_elements
+				std::map<std::string, json>::const_iterator object_iterator;
+				// use integer pointer instead of array_elements iterator
+				size_t ptr;
+
+				public:
+				// construction and destruction
+				const_iterator (const json & j, size_t p = 0);
+				~const_iterator () = default;
+
+				// assignments
+				const_iterator & operator= (const iterator & i) = delete;
+				const_iterator & operator= (iterator && i) = delete;
+
+				// increments and decrements
+				const_iterator & operator++ ();
+				const_iterator & operator-- ();
+				const_iterator operator++ (int);
+				const_iterator operator-- (int);
+
+				// comparison
+				bool operator== (const_iterator & other) const;
+				bool operator!= (const_iterator & other) const { return !(*this == other); }
+
+				// dereferencing
+				std::pair<const std::string, const json &> operator* () const;
+			};
+
 			class iterator
 			{
 				// exceptions
@@ -153,7 +200,7 @@ namespace maxy
 				// use integer pointer instead of array_elements iterator
 				size_t ptr;
 
-				public:
+			public:
 				// construction and destruction
 				iterator (json & j, size_t p = 0);
 				~iterator () = default;
@@ -180,12 +227,23 @@ namespace maxy
 
 			// begin iterator
 			iterator begin ();
+			const_iterator begin () const;
 
 			// end iterator
 			iterator end ();
+			const_iterator end () const;
 
 			// string output
 			friend std::ostream & operator<< (std::ostream & os, const json & j);
+
+			// merge two jsons
+			void merge (const json & incoming, bool keep_existing = false);
+
+			// erase an element from a json object
+			void erase (const std::string & k);
+
+			// remove existing elements that are also present in the incoming
+			void subtract (const json & incoming);
 		};
 	}
 }

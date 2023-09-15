@@ -555,6 +555,44 @@ namespace maxy
 			return array_elements[n];
 		}
 
+		const json empty_json {};
+
+		const json & json::operator[] (const char * const c) const
+		{
+			return (*this)[std::string {c}];
+		}
+
+		const json & json::operator[] (const std::string & key) const
+		{
+			if (type != json_type::Object)
+			{
+				return empty_json;
+			}
+
+			auto e = object_elements.find (key);
+			if (e == object_elements.end ())
+			{
+				return empty_json;
+			}
+
+			return e->second;
+		}
+
+		const json & json::operator[] (size_t n) const
+		{
+			if (type != json_type::Array)
+			{
+				return empty_json;
+			}
+
+			if (n + 1 > array_elements.size ())
+			{
+				return empty_json;
+			}
+
+			return array_elements[n];
+		}
+
 		/**
 		 * Array operations
 		 */
@@ -701,13 +739,110 @@ namespace maxy
 			}
 		}
 
+
+		// Const iterator
+		// iterator construction
+		json::const_iterator::const_iterator (const json & j, size_t p) :
+			ref {j},
+			ptr {p},
+			initial_type {j.type}
+		{
+			if (ref.type == json_type::Object)
+			{
+				if (!p)
+					object_iterator = ref.object_elements.begin ();
+				else
+					object_iterator = ref.object_elements.end ();
+			}
+		}
+
+		// iterator preincrement
+		json::const_iterator & json::const_iterator::operator++ ()
+		{
+			ptr++;
+			if (ref.type == json_type::Object)
+				++object_iterator;
+			return *this;
+		}
+		// iterator predecrement
+		json::const_iterator & json::const_iterator::operator-- ()
+		{
+			ptr--;
+			if (ref.type == json_type::Object)
+				--object_iterator;
+			return *this;
+		}
+		// iterator postincrement
+		json::const_iterator json::const_iterator::operator++ (int)
+		{
+			auto temp = *this;
+			++(*this);
+			return temp;
+		}
+		// iterator postdecrement
+		json::const_iterator json::const_iterator::operator-- (int)
+		{
+			auto temp = *this;
+			--(*this);
+			return temp;
+		}
+		// equality
+		bool json::const_iterator::operator== (json::const_iterator & other) const
+		{
+			if (&ref != &other.ref) return false;
+			return ptr == other.ptr;
+		}
+		// dereferencing
+		std::pair<const std::string, const json &> json::const_iterator::operator* () const
+		{
+			if (initial_type != ref.type)
+				throw json::const_iterator::invalidated {};
+
+			switch (initial_type)
+			{
+			case json::json_type::Array:
+				if (ptr >= ref.array_elements.size ())
+					throw json::const_iterator::out_of_range {};
+				return{std::string{}, ref.array_elements[ptr]};
+
+			case json::json_type::Object:
+				if (ptr >= ref.object_elements.size ())
+					throw json::const_iterator::out_of_range {};
+				return{object_iterator->first, object_iterator->second};
+
+			default:
+				if (ptr > 0)
+					throw json::const_iterator::out_of_range {};
+
+				return{std::string{}, ref};
+			}
+		}
+
 		// begin iterator
+		json::const_iterator json::begin () const
+		{
+			return json::const_iterator (*this);
+		}
+
 		json::iterator json::begin ()
 		{
 			return json::iterator (*this);
 		}
 
 		// end iterator
+		json::const_iterator json::end () const
+		{
+			switch (type)
+			{
+			case json_type::Array:
+				return const_iterator (*this, array_elements.size ());
+			case json_type::Object:
+				return const_iterator (*this, object_elements.size ());
+			default:
+				return const_iterator (*this, 1);
+			}
+		}
+
 		json::iterator json::end ()
 		{
 			switch (type)
@@ -732,6 +867,74 @@ namespace maxy
 				return object_elements.size ();
 			default:
 				return 0;
+			}
+		}
+
+		// merge two jsons
+		void json::merge (const json & incoming, bool keep_existing)
+		{
+			// if the types differ, replace the whole element
+			// do the same if the types match and the type is not object
+			// (which means arrays are overwritten as a whole)
+			if (type != incoming.type || type != json_type::Object)
+			{
+				// Overwrite local element if we're required to do so
+				// or if it is empty (which means it does not actually exist)
+				if (!keep_existing || type == json_type::Empty)
+				{
+					*this = incoming;
+				}
+
+				return;
+			}
+
+			for (auto inc : incoming)
+			{
+				(*this)[inc.first].merge (inc.second, keep_existing);
+			}
+		}
+
+		// erase an element from a json object
+		void json::erase (const std::string & k)
+		{
+			if (type != json_type::Object)
+			{
+				return;
+			}
+
+			object_elements.erase (k);
+		}
+
+		// remove existing elements that are also present in the incoming
+		void json::subtract (const json & incoming)
+		{
+			if (type != json_type::Object || incoming.type != json_type::Object)
+			{
+				// subtract may operate on objects only
+				return;
+			}
+
+			for (auto inc : incoming)
+			{
+				if (inc.second.type != json_type::Object)
+				{
+					// If the incoming element is not object, it has no further structure
+					// So delete it at once
+					erase (inc.first);
+					continue;
+				}
+
+				// Get the local element with the same name
+				auto target = (*this)[inc.first];
+
+				if (target.type != json_type::Object)
+				{
+					// This is not an object, so delete is at once
+					erase (inc.first);
+					continue;
+				}
+
+				target.subtract (inc.second);
 			}
 		}
 	}
