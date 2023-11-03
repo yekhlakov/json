@@ -64,4 +64,15 @@ int main ()
 	json x1 = json::parse ("{\"quote\\\"key\":123, inner: [{}, {\"a\" : \"b\"}]}");
 	std::cout << "Relaxed input: " << x1 << ", is_ok = " << x1.is_ok () << "\n";
 
-}
+	json adhoc
+	{{
+		{"a", json{1}},
+		{"b", json
+			{{
+				{"lol", json{"kek"}}
+			}}
+		},
+		{"c", json{true}},
+		{"d", json{nullptr}}
+	}};
+	std::cout << "Ad hoc construction: " << adhoc << ", expected {\"a\":1,\"b\":{\"lol\":\"kek\"},\"c\":true,\"d\":null}\n";}

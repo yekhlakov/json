@@ -61,7 +61,7 @@ namespace maxy
 
 			// copy and move operations are all default
 			json (const json &) = default;
-			json (json &&) = default;
+			json (json &&) noexcept = default;
 			json & operator= (const json &) = default;
 			json & operator= (json &&) = default;
 
@@ -69,16 +69,15 @@ namespace maxy
 			~json () = default;
 
 			// Constructors
-			json () : type{json_type::Empty}, error{json_error::None} {}
-			json (const std::string & s) : type{json_type::String}, string_value{s}, error{json_error::None} {}
-			json (long long n) : type{json_type::NumberInt}, error{json_error::None} { int_value = n; }
-			json (long double n) : type{json_type::NumberFloat}, error{json_error::None} { float_value = n; }
-			json (bool n) : error{json_error::None} { if (n) { type = json_type::True; } else { type = json_type::False; } }
-			json (const char * const p) : error{json_error::None}
-			{
-				if (p) { type = json_type::String; string_value = p; }
-				else { type = json_type::Null; }
-			}
+			json ();
+			json (const std::string & s);
+			json (std::nullptr_t);
+			json (int n);
+			json (long long n);
+			json (long double n);
+			json (bool n);
+			json (const char * const p);
+			json (std::initializer_list<std::pair<const char *, json>> list);
 
 			void clear ()
 			{
@@ -236,10 +235,8 @@ namespace maxy
 			// string output
 			friend std::ostream & operator<< (std::ostream & os, const json & j);
 
-			// merge two jsons
 			void merge (const json & incoming, bool keep_existing = false);
 
-			// erase an element from a json object
 			void erase (const std::string & k);
 
 			// remove existing elements that are also present in the incoming

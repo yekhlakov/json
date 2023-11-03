@@ -285,6 +285,37 @@ namespace maxy
 			return parse_value (is, 0).first;
 		}
 
+		// Default constructor
+		json::json () : type {json_type::Empty}, error {json_error::None} {}
+		// Construct a json string from a string
+		json::json (const std::string & s) : type {json_type::String}, string_value {s}, error {json_error::None} {}
+		// Construct from a nullptr
+		json::json (std::nullptr_t) : type {json_type::Null}, error {json_error::None} {};
+		// Construct a json int from an int
+		json::json (int n) : type {json_type::NumberInt}, error {json_error::None} { int_value = n; }
+		// Construct a json int from a long long
+		json::json (long long n) : type {json_type::NumberInt}, error {json_error::None} { int_value = n; }
+		// Construct a json float from a long double
+		json::json (long double n) : type {json_type::NumberFloat}, error {json_error::None} { float_value = n; }
+		// Construct a json bool from a bool
+		json::json (bool n) : error {json_error::None} { if (n) { type = json_type::True; } else { type = json_type::False; } }
+		// Construct a json string from a char ptr
+		json::json (const char * const p) : error {json_error::None}
+		{
+			if (p) { type = json_type::String; string_value = p; }
+			else { type = json_type::Null; }
+		}
+		// Construct a json object from initilalizer list containing key, value pairs
+		json::json (std::initializer_list<std::pair<const char *, json>> list)
+		{
+			type = json_type::Object;
+
+			for (auto & el : list)
+			{
+				object_elements[el.first] = el.second;
+			}
+		}
+
 		/**
 		 * Conversion to bool
 		 */
@@ -301,6 +332,7 @@ namespace maxy
 					 );
 		}
 
+		// Conversion to int
 		json::operator int () const {
 			if (type == json_type::NumberFloat)
 				return static_cast<int>(float_value);
@@ -311,6 +343,7 @@ namespace maxy
 			return 0;
 		}
 
+		// Conversion to long
 		json::operator long () const
 		{
 			if (type == json_type::NumberFloat)
@@ -322,6 +355,7 @@ namespace maxy
 			return 0;
 		}
 
+		// Conversion to long long
 		json::operator long long () const
 		{
 			if (type == json_type::NumberFloat)
@@ -333,6 +367,7 @@ namespace maxy
 			return 0;
 		}
 
+		// Conversion to float
 		json::operator float () const
 		{
 			if (type == json_type::NumberFloat)
@@ -344,6 +379,7 @@ namespace maxy
 			return 0.f;
 		}
 
+		// Conversion to double
 		json::operator double () const
 		{
 			if (type == json_type::NumberFloat)
@@ -355,6 +391,7 @@ namespace maxy
 			return 0.;
 		}
 
+		// Conversion to long double
 		json::operator long double () const
 		{
 			if (type == json_type::NumberFloat)
@@ -366,6 +403,7 @@ namespace maxy
 			return 0.;
 		}
 
+		// Conversion to string
 		json::operator const std::string () const { return string_value; }
 
 		/**
